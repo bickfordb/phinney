@@ -69,10 +69,9 @@ func (req *Request) Template(name string, data interface{}) (err error) {
 }
 
 func (tmpls *templates) LoadResourceTemplates() (err error) {
-  templatesPat := regexp.MustCompile("^.+/templates/(.+)$")
+  templatesPat := regexp.MustCompile("^templates/(.+)$")
   helpersPat := regexp.MustCompile("^.+/helpers/.+$")
-  keys := Resources.Keys()
-  for _, key := range keys {
+  for _, key := range Resources.Keys() {
     if !templatesPat.MatchString(key) || !helpersPat.MatchString(key) { continue }
     data := Resources.Get(key)
     if data == nil { continue }
@@ -80,11 +79,12 @@ func (tmpls *templates) LoadResourceTemplates() (err error) {
     err = tmpls.RegisterHelperTemplate(path, string(data))
     if err != nil { return }
   }
-  for _, key := range keys {
+  for _, key := range Resources.Keys() {
     if !templatesPat.MatchString(key) || helpersPat.MatchString(key) { continue }
     data := Resources.Get(key)
     if data == nil { continue }
-    path := strings.Replace(key, "/templates/", "", -1)
+    m := templatesPat.FindStringSubmatch(key)
+    path := m[1]
     err = tmpls.RegisterTemplate(path, string(data))
     if err != nil { return }
   }

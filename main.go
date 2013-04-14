@@ -1,6 +1,5 @@
 package phinney
 
-
 import (
   "flag"
   "fmt"
@@ -43,9 +42,12 @@ func web() (err error) {
   return
 }
 
+
 func main() (err error) {
   flag.Parse()
   switch cmd := flag.Arg(0); cmd {
+  case "new":
+    err = newProject()
   case "web":
     err = web()
   case "":

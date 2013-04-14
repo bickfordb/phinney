@@ -2,11 +2,12 @@ package phinney
 
 import (
   "fmt"
+  "html"
   "mime"
   "net/http"
   "path/filepath"
-  "time"
   "regexp"
+  "time"
 )
 
 type Method string
@@ -83,7 +84,8 @@ func (app *App) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
         log.Debug("error: %s", err.Error())
         writer.WriteHeader(503)
         writer.Header().Add("Content-Type", "text/html; charset=utf-8")
-        writer.Write([]byte(`<html><body><h1>Server Error</h1></body></html>`))
+        msg := fmt.Sprintf(`<html><body><h1>Server Error</h1><p><pre>%q</pre></body></html>`, html.EscapeString(err.Error()))
+        writer.Write([]byte(msg))
       }
       return
     }
