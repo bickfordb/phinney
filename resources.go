@@ -86,7 +86,6 @@ func DecodeResourceData(src []byte) []byte {
 }
 
 func (r *resources) loadZipData(src string) (err error) {
-  log.Error("hi")
   err = nil
   sz := exeLen(src)
   if sz == 0 { return }
