@@ -14,11 +14,24 @@ if (typeof window == "undefined") {
   var window = {};
 }
 if (typeof bundle == "undefined") {
-  window.bundle = {"modules": {}, "templates": {}};
+  window.bundle = {"moduleSrcs" : {}, "modules": {}, "templates": {}};
 }
 
 if (typeof require == "undefined") {
-  window.require = function(m) { return bundle.modules[m]; };
+  window.require = function(m) {
+    if (typeof bundle.modules[m] == "undefined") {
+      if (typeof bundle.moduleSrcs[m] == "undefined") {
+        throw new Error("expecting module \"" + m + "\"");
+      }
+      {
+        var module = {"exports": {}, "id": m, "require": require};
+        bundle.modules[m] = module;
+        var exports = module.exports;
+        eval(bundle.moduleSrcs[m]);
+      }
+    }
+    return bundle.modules[m].exports;
+  };
 }
 `
 
@@ -33,17 +46,9 @@ func (bundle *JSBundle) compileModules(dst *bytes.Buffer) (err error) {
       err = fmt.Errorf("cant find module %q", module)
       return
     }
-    moduleJS := &bytes.Buffer{}
-    moduleJS.Write(srcBytes)
-    moduleJS.WriteString("//@ sourceURL=" + module + "\n");
-    dst.WriteString("{\n")
-    dst.WriteString("  var exports = {};\n")
-    dst.WriteString("  bundle.modules[\"" + template.JSEscapeString(module) + "\"] = exports;\n")
-    dst.WriteString(`  eval("`)
-    dst.WriteString(template.JSEscapeString(moduleJS.String()))
-    dst.WriteString(`");`)
-    dst.WriteString("\n");
-    dst.WriteString("}\n");
+    dst.WriteString("bundle.moduleSrcs[\"" + template.JSEscapeString(module) + "\"] = \"");
+    template.JSEscape(dst, srcBytes);
+    dst.WriteString(" //@ sourceURL=" + module + "\";\n");
   }
   return
 }
