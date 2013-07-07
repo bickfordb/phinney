@@ -1,129 +1,101 @@
 package phinney
 
 import (
-  "fmt"
-  "html"
-  "mime"
-  "net/http"
-  "path/filepath"
-  "regexp"
-  "time"
+	"bytes"
+	"fmt"
+	"html/template"
+	"net/http"
+	"time"
 )
-
-type Method string
-
-const (
-  Any Method = ""
-  Post = "POST"
-  Get = "GET"
-  Delete = "DELETE"
-  Put = "PUT"
-  Head = "HEAD"
-)
-
-type Handler (func(req *Request) (err error))
-
-type Route struct {
-  method Method
-  path *regexp.Regexp
-  handler Handler
-}
-
-func (app *App) Add(method Method, pattern string, handler Handler) {
-  app.routes = append(app.routes, &Route{method, regexp.MustCompile(pattern), handler})
-}
-
-func (app *App) Get(pattern string, handler Handler) {
-  app.Add(Get, pattern, handler)
-}
-
-func (app *App) Post(pattern string, handler Handler) {
-  app.Add(Post, pattern, handler)
-}
-
-func (req *Request) NotFound() {
-  http.NotFound(req.Response, req.Request)
-}
-
-func (app *App) Resource(pattern string, resourcePath string) {
-  app.Add(Get, pattern, func(req *Request) (err error) {
-    if len(req.Args) != 1 {
-      req.NotFound()
-      return
-    }
-    path := fmt.Sprintf(resourcePath, req.Args[0])
-    data := Resources.Get(path)
-    if data == nil {
-      req.NotFound()
-      return
-    } else {
-      contentType := mime.TypeByExtension(filepath.Ext(path))
-      if contentType == "" {
-        contentType = "application/octet-stream"
-      }
-      req.Response.Header().Add("Content-Type", contentType)
-      req.Response.Header().Add("Content-Length", fmt.Sprintf("%d", len(data)))
-      req.Response.Write(data)
-    }
-    return
-  })
-}
 
 func (app *App) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-  path := request.URL.Path
-  for _, route := range app.routes {
-    matches := route.path.FindStringSubmatch(path)
-    if matches != nil {
-      req := &Request{
-        Request:request,
-        Response:writer,
-        App:app,
-        Args:matches[1:]}
-      err := route.handler(req)
-      if err != nil {
-        log.Debug("error: %s", err.Error())
-        writer.WriteHeader(503)
-        writer.Header().Add("Content-Type", "text/html; charset=utf-8")
-        msg := fmt.Sprintf(`<html><body><h1>Server Error</h1><p><pre>%q</pre></body></html>`, html.EscapeString(err.Error()))
-        writer.Write([]byte(msg))
-      }
-      return
-    }
+  err := app.serveHTTP(writer, request)
+  if err != nil {
+    app.RenderError(writer, request, err)
   }
-  http.NotFound(writer, request)
-}
-
-func (app *App) Serve(addr string) (err error) {
-  server := &http.Server{
-    Addr: addr,
-    Handler: app,
-    ReadTimeout: 10 * time.Second,
-    WriteTimeout: 10 * time.Second,
-    MaxHeaderBytes: 1 << 20}
-  err = server.ListenAndServe()
   return
 }
 
+
+func (app *App) serveHTTP(writer http.ResponseWriter, request *http.Request) (err error) {
+
+  req := &Request{
+			Request:  request,
+			Response: writer,
+			App:      app,
+			Context:  make(map[string]interface{})}
+  route, args := app.Router.Search(request.Method, request.URL.Path)
+  req.Args = args
+  for _, plugin := range app.Plugins {
+    if plugin.StartRequest != nil {
+      err = plugin.StartRequest(app, req)
+      if err != nil {
+        return
+      }
+    }
+  }
+  if route != nil {
+    err = route.Handler(req)
+  } else {
+    http.NotFound(writer, request)
+  }
+  return
+}
+
+func (app *App) RenderError(writer http.ResponseWriter, request *http.Request, err error) {
+  log.Debug("Request Error: %q", err.Error())
+  writer.WriteHeader(503)
+  writer.Header().Add("Content-Type", "text/html; charset=utf-8")
+  buf := &bytes.Buffer{}
+  ErrorTemplate.Execute(buf, map[string]interface{}{"Error": err.Error()})
+  writer.Header().Add("Content-Length", fmt.Sprintf("%d", len(buf.Bytes())))
+  writer.Write(buf.Bytes())
+}
+
+var ErrorTemplate *template.Template = template.Must(template.New("error").Parse(
+	`<!doctype html>
+<html>
+  <body>
+    <h1>503 Server Error</h1>
+    <p>
+      <pre>{{.Error}}</pre>
+    </p>
+  </body>
+</html>
+`))
+
+func (app *App) Listen(addr string) {
+	go func() {
+		log.Info("listening on %q", addr)
+		server := &http.Server{
+			Addr:           addr,
+			Handler:        app,
+			ReadTimeout:    10 * time.Second,
+			WriteTimeout:   10 * time.Second,
+			MaxHeaderBytes: 1 << 20}
+		e := server.ListenAndServe()
+		app.Errors <- MakeAppError("Listen", e.Error())
+	}()
+	return
+}
+
 type HandlerFn struct {
-  F http.HandlerFunc
+	F http.HandlerFunc
 }
 
 func (h *HandlerFn) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-  h.F(writer, request)
+	h.F(writer, request)
 }
 
 func FromFn(f http.HandlerFunc) http.Handler {
-  return &HandlerFn{f}
-}
-
-
-func RunRoutes(address string, patterns []*URLPattern) {
+	return &HandlerFn{f}
 }
 
 type Request struct {
-  Args []string
-  Request *http.Request
-  Response http.ResponseWriter
-  App *App
+	Args     []string
+	Request  *http.Request
+	Response http.ResponseWriter
+	App      *App
+	Context  map[string]interface{}
 }
 

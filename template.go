@@ -1,94 +1,86 @@
 package phinney
 
 import (
-  "bytes"
-  "fmt"
-  "html/template"
-  "io"
-  "regexp"
-  "strings"
+	"bytes"
+	"fmt"
+	"html/template"
+	"path/filepath"
+	"regexp"
 )
 
-/*
-Due to the nature of Go templates, dependencies must be parsed before their parent is parsed.  A common pattern is to have a layout template
-
-$pkg/templates/$x
-$pkg/templates/helpers/$y
-*/
-
-type templates struct {
-  helperTemplates *template.Template
-  templates map[string]*template.Template
+func (req *Request) Template(path string) (err error) {
+	buf := &bytes.Buffer{}
+	tmpl, err := req.App.GetTemplate(path)
+	if err != nil {
+		return
+	}
+	err = tmpl.Execute(buf, req.Context)
+	if err != nil {
+		return
+	}
+	req.Response.Header().Add("Content-Type", "text/html; charset=utf-8")
+	req.Response.WriteHeader(200)
+	w := bytes.NewBuffer(buf.Bytes())
+	_, err = w.WriteTo(req.Response)
+	return
 }
 
-var Templates templates
-
-func init() {
-  Templates.helperTemplates = template.Must(template.New("---").Parse(""))
-  Templates.templates = make(map[string]*template.Template)
+type TemplateError struct {
+	Path     string
+	SubError error
 }
 
-func (tmpls *templates) RegisterTemplate(path string, source string) (err error) {
-  t, err := tmpls.helperTemplates.Clone()
-  if err != nil { return }
-  t = t.New(path)
-  t, err = t.Parse(source)
-  if err != nil { return }
-  tmpls.templates[path] = t
-  return
+func (t *TemplateError) Error() string {
+	return t.SubError.Error()
 }
 
-func (tmpls *templates) RegisterHelperTemplate(path string, source string) (err error) {
-  t, err :=  tmpls.helperTemplates.New(path).Parse(source)
-  if err != nil {
-    return
-  }
-  tmpls.helperTemplates = t
-  return
+func (app *App) getTemplate0(root *template.Template, path string, searchPaths []string) (tmpl *template.Template, err error) {
+	var tmplSrcBytes []byte
+	for _, searchPath := range searchPaths {
+		tmplSrcBytes = app.Resources.Get(filepath.Join(searchPath, path))
+		if tmplSrcBytes != nil {
+			break
+		}
+	}
+	if tmplSrcBytes == nil {
+		err = &TemplateError{path, fmt.Errorf("%q does not exist", path)}
+		return
+	}
+	tmplSrc := string(tmplSrcBytes)
+	if root == nil {
+		tmpl = template.New(path)
+		root = tmpl
+	} else {
+		tmpl = root.New(path)
+	}
+	tmpl.Delims("{%", "%}")
+	tmpl.Funcs(app.TemplateFuncs)
+	tmpl, err = tmpl.Parse(tmplSrc)
+	includes := parseIncludes(tmplSrc)
+	for _, include := range includes {
+		t := root.Lookup(include)
+		if t != nil {
+			continue
+		}
+		_, err = app.getTemplate0(root, include, searchPaths)
+		if err != nil {
+			return
+		}
+	}
+	tmpl = root
+	return
 }
 
-func (tmpls *templates) Template(writer io.Writer, name string, data interface{}) (err error) {
-  t, exists := tmpls.templates[name]
-  if !exists {
-    err = fmt.Errorf("missing template %s", name)
-    return
-  }
-  err = t.Execute(writer, data)
-  return
+func (app *App) GetTemplate(path string) (result *template.Template, err error) {
+	result, err = app.getTemplate0(nil, path, []string{".", "templates"})
+	return
 }
 
-func (req *Request) Template(name string, data interface{}) (err error) {
-  buf := bytes.NewBuffer(make([]byte, 0, 10000))
-  err = Templates.Template(buf, name, data)
-  if err != nil { return }
-  req.Response.Header().Add("Content-Type", "text/html; charset=utf-8")
-  req.Response.WriteHeader(200)
-  w := bytes.NewBuffer(buf.Bytes())
-  _, err = w.WriteTo(req.Response)
-  return
+func parseIncludes(src string) (result []string) {
+	pat := regexp.MustCompile(`\{\{\s*template\s+"(.+)".*\}\}`)
+	result = make([]string, 0)
+	for _, match := range pat.FindAllStringSubmatch(src, -1) {
+		result = append(result, match[1])
+	}
+	return
 }
-
-func (tmpls *templates) LoadResourceTemplates() (err error) {
-  templatesPat := regexp.MustCompile("^templates/(.+)$")
-  helpersPat := regexp.MustCompile("^.+/helpers/.+$")
-  for _, key := range Resources.Keys() {
-    if !templatesPat.MatchString(key) || !helpersPat.MatchString(key) { continue }
-    data := Resources.Get(key)
-    if data == nil { continue }
-    path := strings.Replace(key, "/templates/", "", -1)
-    err = tmpls.RegisterHelperTemplate(path, string(data))
-    if err != nil { return }
-  }
-  for _, key := range Resources.Keys() {
-    if !templatesPat.MatchString(key) || helpersPat.MatchString(key) { continue }
-    data := Resources.Get(key)
-    if data == nil { continue }
-    m := templatesPat.FindStringSubmatch(key)
-    path := m[1]
-    err = tmpls.RegisterTemplate(path, string(data))
-    if err != nil { return }
-  }
-  return
-}
-
-
