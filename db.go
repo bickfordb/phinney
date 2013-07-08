@@ -155,39 +155,12 @@ var timeType reflect.Type = reflect.TypeOf(time.Now())
 var byteSliceType reflect.Type = reflect.TypeOf([]byte{})
 
 func (r *SelectResult) Next() (isNext bool, err error) {
-	fs := r.query.fields()
-	cs := make([]interface{}, 0, len(fs))
-	structPtr := r.query.getRoot().structPtr
-
-	for _, f := range fs {
-		switch f.Type.Kind() {
-		case reflect.Int64, reflect.Int32, reflect.Int16, reflect.Int8:
-			var v int64
-			cs = append(cs, &v)
-		case reflect.String:
-			var v string
-			cs = append(cs, &v)
-		case reflect.Float64, reflect.Float32:
-			var v float64
-			cs = append(cs, &v)
-		case reflect.Bool:
-			var v bool
-			cs = append(cs, &v)
-		default:
-			if f.Type == timeType {
-				var v time.Time
-				cs = append(cs, &v)
-			} else if f.Type == byteSliceType {
-				var v []byte
-				cs = append(cs, &v)
-			} else {
-				err = fmt.Errorf("unexpected kind %q", f.Type.Kind().String())
-			}
-		}
-	}
-	if err != nil {
-		return
-	}
+  val := reflect.ValueOf(r.query.getRoot().structPtr).Elem()
+	cs := make([]interface{}, 0, val.NumField())
+  for i := 0; i < val.NumField(); i++ {
+    valFld := val.Field(i)
+    cs = append(cs, valFld.Addr().Interface())
+  }
 	isNext = r.rows.Next()
   if !isNext {
     return
@@ -199,12 +172,6 @@ func (r *SelectResult) Next() (isNext bool, err error) {
 	err = r.rows.Scan(cs...)
 	if err != nil {
 		return
-	}
-	for i, _ := range fs {
-		valFld := reflect.ValueOf(structPtr).Elem().Field(i)
-		srcVal := reflect.ValueOf(cs[i]).Elem()
-		// FIXME: handle null?
-		valFld.Set(srcVal)
 	}
 	return
 }
