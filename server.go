@@ -26,18 +26,37 @@ func (app *App) serveHTTP(writer http.ResponseWriter, request *http.Request) (er
 			Context:  make(map[string]interface{})}
   route, args := app.Router.Search(request.Method, request.URL.Path)
   req.Args = args
+  var halt bool
   for _, plugin := range app.Plugins {
+    if halt {
+      break
+    }
     if plugin.StartRequest != nil {
-      err = plugin.StartRequest(app, req)
+      halt, err = plugin.StartRequest(app, req)
       if err != nil {
         return
       }
     }
   }
-  if route != nil {
-    err = route.Handler(req)
-  } else {
-    http.NotFound(writer, request)
+  for _, plugin := range app.Plugins {
+    if halt {
+      break
+    }
+    if plugin.BeforeHandler != nil {
+      halt, err = plugin.BeforeHandler(app, req)
+    }
+  }
+  if !halt {
+    if route != nil {
+      err = route.Handler(req)
+    } else {
+      http.NotFound(writer, request)
+    }
+  }
+  for _, plugin := range app.Plugins {
+    if plugin.AfterResponse != nil {
+      err = plugin.AfterResponse(app, req)
+    }
   }
   return
 }

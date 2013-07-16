@@ -26,3 +26,14 @@ func (r *Request) JSONResponse(record interface {}) (err error) {
 }
 
 
+func (r *Request) TemporaryRedirect(location string) (err error) {
+  r.Response.Header().Add("Location", location)
+  r.Response.WriteHeader(307)
+  return
+}
+
+func (r *Request) Unauthorized() (err error) {
+  r.Response.WriteHeader(401)
+  return
+}
+

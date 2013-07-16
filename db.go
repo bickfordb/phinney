@@ -123,6 +123,13 @@ func (q *SelectQuery) Compile() (sql string, bind []interface{}) {
 }
 
 func (q *SelectQuery) Exec(db *sql.DB) (result *SelectResult, err error) {
+  if db == nil {
+    db, err = DBConn()
+    if err != nil {
+      return
+    }
+    defer db.Close()
+  }
 	sql, bind := q.Compile()
   log.Debug("sql: %q", sql)
 	rows, err := db.Query(sql, bind...)
@@ -257,6 +264,14 @@ func compileInsert(relation string, structPtr interface{}) (sql string, bind []i
 }
 
 func Insert(db *sql.DB, relation string, structPtr interface {}) (err error) {
+  if db == nil {
+    db, err = DBConn()
+    if err != nil {
+      return
+    }
+    defer db.Close()
+  }
+
   if reflect.ValueOf(structPtr).Kind() != reflect.Ptr {
     err = fmt.Errorf("expecting pointer but got %q", reflect.ValueOf(structPtr).Kind())
     return
@@ -329,6 +344,13 @@ func compileUpdate(relation string, structPtr interface{}) (sql string, bind []i
 }
 
 func Update(db *sql.DB, relation string, structPtr interface{}) (err error) {
+  if db == nil {
+    db, err = DBConn()
+    if err != nil {
+      return
+    }
+    defer db.Close()
+  }
   sql, bind := compileUpdate(relation, structPtr)
   log.Debug("update sql: %q", sql)
   _, err = db.Exec(sql, bind...)

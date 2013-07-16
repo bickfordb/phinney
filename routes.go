@@ -102,7 +102,7 @@ func (app *App) Get(pattern string, name string, reverse string, handler Handler
 
 func (app *App) Post(pattern string, name string, reverse string, handler Handler) {
 	app.Router.Add(&Route{
-		Method:  Get,
+		Method:  Post,
 		Name:    name,
 		Reverse: reverse,
 		Pattern: regexp.MustCompile(pattern),

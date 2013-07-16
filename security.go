@@ -5,6 +5,7 @@ import (
   "math/rand"
   "encoding/base64"
   "encoding/binary"
+  "encoding/json"
   //"io/ioutil"
   "time"
   "fmt"
@@ -47,7 +48,7 @@ func CheckPassword(password, salted string) bool {
   return salted == ToSaltedPassword(password, p[1])
 }
 
-func CheckString1(s string, key []byte) (result string, at *time.Time) {
+func CheckString1(s string, key []byte) (result string, at time.Time) {
   sepIdx := strings.LastIndex(s, "$")
   if sepIdx < 0 { return }
   s0 := s[:sepIdx]
@@ -60,12 +61,12 @@ func CheckString1(s string, key []byte) (result string, at *time.Time) {
   expected := SecureString2(s0, key, at0)
   if expected == s {
     result = s0
-    at = &at0
+    at = at0
   }
   return
 }
 
-func CheckString(s string) (result string, at *time.Time) {
+func CheckString(s string) (result string, at time.Time) {
   result, at = CheckString1(s, SecureStringSecret)
   return
 }
@@ -102,10 +103,34 @@ func (req *Request) AddSecureCookie(cookie *http.Cookie) {
   req.Response.Header().Add("Set-Cookie", cookie0.String())
 }
 
-func (req *Request) GetSecureCookie(name string) (s string, at *time.Time) {
+func (req *Request) GetSecureCookie(name string) (s string, at time.Time) {
   cookie, err := req.Request.Cookie(name)
   if cookie == nil || err != nil { return }
   s, at = CheckString(cookie.Value)
   return
 }
+
+func SecureObject(o interface {}) (s string, err error) {
+  bs, err := json.Marshal(o)
+  if err != nil {
+    return
+  }
+  s = SecureString(string(bs))
+  return
+}
+
+func DecodeSecureObject(encoded string, objPtr interface{}) (decoded bool, at time.Time, err error) {
+  s, at := CheckString(encoded)
+  if s == "" {
+    return
+  }
+  err = json.Unmarshal([]byte(s), objPtr)
+  if err != nil {
+    return
+  }
+  decoded = true
+  return
+}
+
+
 
