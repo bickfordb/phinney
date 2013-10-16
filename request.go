@@ -2,19 +2,31 @@ package phinney
 
 import (
   "encoding/json"
-  "fmt"
   "regexp")
 
-var JSONContentType *regexp.Regexp = regexp.MustCompile(`^.*application[/]json\s*(?:[;].+)$`)
+var JSONContentType *regexp.Regexp = regexp.MustCompile(`^application[/]json.*$`)
 
+func (r *Request) IsJSON() bool {
+  return JSONContentType.MatchString(r.Request.Header.Get("Content-Type"))
+
+}
 func (r *Request) JSONParams(record interface {}) (e error) {
-  contentType := r.Request.Header.Get("Content-Type")
-  if JSONContentType.MatchString(contentType) {
-    e = fmt.Errorf("expecting JSON Content-Type but got %q", contentType)
-    return
+  if r.Request.Method == "GET" {
+    data := r.Request.URL.Query().Get("params")
+    if (data != "") {
+      log.Debug("url: %q", r.Request.URL.String())
+      log.Debug("decoding %q", data)
+      json.Unmarshal([]byte(data), record)
+      // ignore GET-ish errors
+    }
+  } else {
+    if !r.IsJSON() {
+      //e = fmt.Errorf("expecting JSON Content-Type but got %q", r.Request.Header.Get("Content-Type"))
+      return
+    }
+    dec := json.NewDecoder(r.Request.Body)
+    e = dec.Decode(record)
   }
-  dec := json.NewDecoder(r.Request.Body)
-  e = dec.Decode(record)
   return
 }
 
@@ -37,3 +49,7 @@ func (r *Request) Unauthorized() (err error) {
   return
 }
 
+func (r *Request) BadRequest() (err error) {
+  r.Response.WriteHeader(400)
+  return
+}

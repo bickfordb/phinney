@@ -44,6 +44,9 @@ func (app *App) serveHTTP(writer http.ResponseWriter, request *http.Request) (er
     }
     if plugin.BeforeHandler != nil {
       halt, err = plugin.BeforeHandler(app, req)
+      if err != nil {
+        return
+      }
     }
   }
   if !halt {

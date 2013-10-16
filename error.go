@@ -1,17 +1,33 @@
 package phinney
 
 import "fmt"
+import "runtime"
 
-type subErr struct {
-  pkg string
-  err error
+type NestedError struct {
+  File string
+  Line int
+  Err error
 }
 
-func (e *subErr) Error() string {
-  return fmt.Sprintf("%s: %s", e.pkg, e.err.Error())
+func (e *NestedError) Error() string {
+  msg := ""
+  if e.Err != nil {
+    msg = e.Err.Error()
+  }
+  return fmt.Sprintf("%s (%d): %s", e.File, e.Line, msg)
 }
 
-func subError(pkg string, err error) error {
-  return &subErr{pkg, err}
+func NestError(err error) (e error) {
+  if err == nil {
+    return
+  }
+  if err != nil {
+    e = err
+  }
+  _, file, line, _ := runtime.Caller(1)
+  file = ""
+  line = 0
+  e = &NestedError{file, line, err}
+  return
 }
 

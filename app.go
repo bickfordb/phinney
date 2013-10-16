@@ -48,10 +48,9 @@ func NewApp() (app *App) {
 			}
 		}
 	}
-	resources := NewResources(resourcePaths)
 	errors := make(chan AppError)
   app.Router = NewRouter()
-  app.Resources = resources
+  app.Resources = NewResources(resourcePaths)
   app.Errors = errors
   app.TemplateFuncs = make(template.FuncMap)
   app.TemplateFuncs["Reverse"] = app.Router.Reverse

@@ -4,6 +4,7 @@ import (
 	"net/http"
   "fmt"
   "io"
+  "crypto/rand"
 )
 
 func (req *Request) NotFound() {
@@ -34,4 +35,10 @@ func ServeBytes (data []byte, headers map[string]string) Handler {
     err = writeAll(data, req.Response)
     return
   }
+}
+
+func GenUUID() string {
+  xs := make([]byte, 16)
+  io.ReadFull(rand.Reader, xs)
+  return fmt.Sprintf("%x-%x-%x-%x-%x", xs[0:4], xs[4:6], xs[6:8], xs[8:10], xs[10:])
 }
