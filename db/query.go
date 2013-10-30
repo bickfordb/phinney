@@ -2,11 +2,13 @@ package db
 
 import (
   "fmt"
+  "strings"
 )
 
 type Query struct {
   Table *Table
   Parent *Query
+  JoinPath []string
   Key string
   Value interface {}
   Conn *Conn
@@ -51,7 +53,17 @@ func (t *Query) sourceTable() (result *Table) {
 }
 
 func (t *Query) Filter(key string, value interface{}) *Query {
-  return &Query{Parent: t, Key: key, Value: value}
+  keys := strings.Split(key, ".")
+  path := keys[:len(keys) - 1]
+  var fill []string
+  if len(path) > 0 {
+    fill = append(fill, strings.Join(path, "."))
+  }
+  fmt.Println("fill", fill)
+  return &Query{
+    Parent: t,
+    Fill: fill,
+    JoinPath: path, Key: keys[len(keys) - 1], Value: value}
 }
 
 
@@ -61,6 +73,25 @@ func NewQuery(table *Table) (result *Query) {
 
 
 func (q *Query) compile() (result string, bind []interface{}, err error) {
+  type Join struct {
+    path []string
+    alias string
+  }
+
+  joins := make(map[string]Join)
+  for curr := q; curr.Parent != nil; curr = curr.Parent {
+    if len(curr.JoinPath) == 0 {
+      continue
+    }
+    for i, _ := range curr.JoinPath {
+      j := Join{}
+      j.path = curr.JoinPath[:i + 1]
+      j.alias = strings.Join(j.path, "__")
+      joins[j.alias] = j
+      // alias is now like "foo" or "foo__bar"
+    }
+  }
+
   var sql SQL
   sql.WriteKeyword("SELECT")
   table := q.sourceTable()
@@ -69,35 +100,71 @@ func (q *Query) compile() (result string, bind []interface{}, err error) {
     if i > 0 {
       sql.Write(", ")
     }
+    sql.WriteIdentifier(table.Name)
+    sql.Write(".")
     sql.WriteIdentifier(col)
     i += 1
   }
   sql.WriteKeyword("FROM")
   sql.WriteIdentifier(table.Name)
+  sql.WriteKeyword("AS")
+  sql.WriteIdentifier(table.Name)
+
+  for toAlias, join := range joins {
+    sql.WriteKeyword("INNER JOIN")
+    to := join.path[len(join.path) - 1]
+    sql.WriteIdentifier(to)
+    sql.Write(" ")
+    sql.WriteIdentifier(toAlias)
+    sql.WriteKeyword("ON")
+    from := table
+    if len(join.path) > 1 {
+      from = schema.Table(join.path[len(join.path) - 2])
+    }
+    fk, exists := from.ForeignKeys[join.path[len(join.path) - 1]]
+    if !exists {
+      err = fmt.Errorf("cant find foreign key")
+      return
+    }
+    sql.WriteIdentifier(toAlias)
+    sql.Write(".")
+    sql.WriteIdentifier(fk.ToCol)
+    sql.WriteKeyword("=")
+    fromAlias := table.Name
+    if len(join.path) > 1 {
+      fromAlias = strings.Join(join.path[:len(join.path) - 1], "__")
+    }
+    sql.WriteIdentifier(fromAlias)
+    sql.Write(".")
+    sql.WriteIdentifier(fk.FromCol)
+  }
+
   clauseNum := 0
   for curr := q; curr.Parent != nil; curr = curr.Parent {
     if curr.Key == "" {
       continue
     }
     if clauseNum == 0 {
-      sql.Write("WHERE")
+      sql.WriteKeyword("WHERE")
     } else {
       sql.WriteKeyword("AND")
     }
     clauseNum += 1
+    if len(curr.JoinPath) > 0 {
+      sql.WriteIdentifier(strings.Join(curr.JoinPath, "__"))
+      sql.Write(".")
+    }
     sql.WriteIdentifier(curr.Key)
     sql.WriteEq(curr.Value)
   }
-  fmt.Printf("sql: %+v\n", sql)
   result = sql.String()
-  fmt.Printf("sql: %q\n", result)
   bind = sql.Bind()
   return
 }
 
 func (q *Query) Each(each func (row *Row) (stop bool)) (err error) {
-  fmt.Printf("each: %+v\n", q)
   rootSQL, rootBind, err := q.compile()
+  fmt.Println("sql: ", rootSQL)
   if err != nil {
     return err
   }
@@ -147,7 +214,7 @@ func (q *Query) fillRows(conn *Conn, rows []*Row, path []string) (err error) {
     if len(pks) == 0 {
       return
     }
-    toTable := srcTable.schema.Tables[fk.ToName]
+    toTable := srcTable.schema.Table(fk.ToName)
     var dstRows []*Row
     dstRows, err = toTable.Query().Filter(fk.ToCol, pks).All()
     if err != nil {

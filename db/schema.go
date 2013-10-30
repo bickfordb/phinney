@@ -3,30 +3,37 @@ package db
 import (
   "fmt"
   "regexp"
+  "os"
 )
 
 var nextValPat *regexp.Regexp = regexp.MustCompile(`^nextval[(].*[)]`)
 
 type Schema struct {
-  Tables map[string]*Table
+  tables map[string]*Table
   Conn *Conn
 }
 
 func NewSchema() *Schema {
+  driver := os.Getenv("DB_ENGINE")
+  uri := os.Getenv("DB_URL")
+
   return &Schema{
-    Tables: make(map[string]*Table),
-    Conn: nil,
+    tables: make(map[string]*Table),
+    Conn: NewConn(driver, uri),
   }
 }
 
-func (schema *Schema) NewTable(name string) *Table {
-  t := &Table{}
-  t.Name = name
-  t.schema = schema
-  t.Columns = make(map[string]*ColumnOptions)
-  t.ForeignKeys = make(map[string]*ForeignKey)
-  schema.Tables[name] = t
-  return t
+func (schema *Schema) Table(name string) (result *Table) {
+  result, exists := schema.tables[name]
+  if !exists {
+    result = &Table{}
+    result.Name = name
+    result.schema = schema
+    result.Columns = make(map[string]*ColumnOptions)
+    result.ForeignKeys = make(map[string]*ForeignKey)
+    schema.tables[name] = result
+  }
+  return
 }
 
 func (schema *Schema) Reflect() (err error) {
@@ -46,8 +53,7 @@ func (schema *Schema) Reflect() (err error) {
   //}
   for _, row := range rows {
     table := row["table_name"].(string)
-    t := schema.NewTable(table)
-    println("table", table)
+    t := schema.Table(table)
     colRows, err := conn.Query(`
       select *
       from information_schema.columns
@@ -63,7 +69,6 @@ func (schema *Schema) Reflect() (err error) {
       isNullable = isNullable
       dataType = dataType
       colDef := &ColumnOptions{}
-      //fmt.Println("col", colRow)
       t.Columns[columnName] = colDef
       colDef.IsNullable = isNullable == "YES"
       // by default required == not null
@@ -111,8 +116,8 @@ func (schema *Schema) Reflect() (err error) {
       WHERE constraint_type = 'FOREIGN KEY'`,
       nil)
   for _, fk := range fks {
-    dst := schema.Tables[fk.String("foreign_table_name")]
-    src := schema.Tables[fk.String("table_name")]
+    dst := schema.Table(fk.String("foreign_table_name"))
+    src := schema.Table(fk.String("table_name"))
 
     toF := &ForeignKey{
       ToName: dst.Name,

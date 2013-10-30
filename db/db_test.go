@@ -3,18 +3,13 @@ package db
 import (
   . "launchpad.net/gocheck"
   "testing"
-  "os"
   "fmt"
 )
-
-var driver = os.Getenv("DB_ENGINE")
-var uri = os.Getenv("DB_URL")
 
 var schema = NewSchema()
 
 func (s *MySuite) Testquery(c *C) {
-  conn := NewConn(driver, uri)
-
+  conn := schema.Conn
   result, err := conn.Query("SELECT 1 as foo", nil)
   c.Assert(err, IsNil)
   c.Check(len(result), Equals, 1)
@@ -32,19 +27,21 @@ func (s *MySuite) Testquery(c *C) {
 }
 
 func (s *MySuite) TestJSON(c *C) {
-
   row := make(RowDict)
   row["hello"] = "there"
   result, err := row.ToJSON()
   c.Assert(err, IsNil)
   c.Check(string(result), Equals, `{"hello":"there"}`)
 
+  row = make(RowDict)
+  row["hello_you_url"] = "bar"
+  result, err = row.ToJSON()
+  c.Assert(err, IsNil)
+  c.Check(string(result), Equals, `{"helloYouURL":"bar"}`)
 }
 
 func (s *MySuite) TestDB(c *C) {
-
-  conn := NewConn(driver, uri)
-  schema.Conn = conn
+  conn := schema.Conn
   _, err := conn.Exec(`
     create table foo (
       id serial primary key,
@@ -61,8 +58,7 @@ func (s *MySuite) TestDB(c *C) {
     nil)
   c.Assert(err, IsNil)
   schema.Reflect()
-  fooTable, exists := schema.Tables["foo"]
-  c.Assert(exists, Equals, true)
+  fooTable := schema.Table("foo")
   foo := fooTable.NewRow()
   foo.Set("text_col", "Hello")
   foo.Set("int_col", 25)
@@ -85,7 +81,7 @@ func (s *MySuite) TestDB(c *C) {
   c.Assert(err, IsNil)
   c.Assert(row, Not(IsNil))
   c.Check(row.Int("int_col"), Equals, int64(36))
-  bars := schema.Tables["bar"]
+  bars := schema.Table("bar")
   c.Assert(bars.ForeignKeys["foo"], Not(IsNil))
 
   bar := bars.NewRow()
@@ -104,7 +100,13 @@ func (s *MySuite) TestDB(c *C) {
   c.Assert(err, IsNil)
   c.Assert(foo.Int("id"), Equals, int64(1))
   c.Assert(len(foo.Rows("bar")), Equals, 1)
+
+  foo, err = fooTable.Query().Filter("bar.id", foo.Get("id")).One()
+  c.Assert(err, IsNil)
+  c.Assert(foo, Not(IsNil))
+  c.Assert(len(foo.Rows("bar")), Equals, 1)
 }
+
 
 
 type MySuite struct{}

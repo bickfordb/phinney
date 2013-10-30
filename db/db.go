@@ -3,7 +3,7 @@ package db
 import (
   "database/sql"
   _ "github.com/lib/pq"
-  "fmt"
+  //"fmt"
 )
 
 
@@ -67,7 +67,7 @@ func (c *Conn) Query(sql string, bind []interface{}) (rows []RowDict, err error)
 type EachRowDict func (rowDict RowDict) (stop bool)
 
 func (c *Conn) QueryEach(sql string, bind []interface{}, each EachRowDict) (err error) {
-  fmt.Printf("query: %q, bind: %+v\n", sql, bind)
+  //fmt.Printf("query: %q, bind: %+v\n", sql, bind)
   db, err := c.open()
   if err != nil {
     return

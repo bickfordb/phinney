@@ -15,7 +15,14 @@ type Row struct {
 func (r RowDict) Row(key string) (result *Row) {
   val, exists := r[key]
   if exists {
-    result, _ = val.(*Row)
+    switch t := val.(type) {
+    case []*Row:
+      if len(t) > 0 {
+        result = t[0]
+      }
+    case *Row:
+      result = t
+    }
   }
   return
 }
