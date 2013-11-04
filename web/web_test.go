@@ -37,20 +37,20 @@ func (d *DummyResponseWriter) WriteHeader(status int) {
 }
 
 type testHandler struct {
-  *Handler
+  Handler
 }
 
 func (h *testHandler) Get() (err error) {
-  return h.WriteHTML("hello")
+  return WriteHTML(h, "hello")
 }
 
 type templateHandler struct {
-  *Handler
+  Handler
 }
 
 func (t *templateHandler) Get() (err error) {
-  p := t.Request.URL.Query().Get("t")
-  err = t.SendTemplate(p, map[string]string{})
+  p := t.Request().URL.Query().Get("t")
+  err = SendTemplate(t, p, map[string]string{})
   return
 }
 
@@ -89,16 +89,16 @@ func (s *MySuite) TestApp(c *C) {
 }
 
 type testJSONHandler struct {
-  *Handler
+  Handler
 }
 
 func (h *testJSONHandler) Post() (err error) {
   var data testJSONData
-  err = h.ReadJSON(&data)
+  err = ReadJSON(h, &data)
   if err != nil {
     return
   }
-  err = h.WriteJSON(data)
+  err = WriteJSON(h, data)
   return
 }
 

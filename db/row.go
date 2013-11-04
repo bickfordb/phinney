@@ -5,6 +5,7 @@ import (
   "encoding/json"
   "fmt"
   "strings"
+  "regexp"
 )
 
 type Row struct {
@@ -281,4 +282,67 @@ func (r RowDict) ToJSONDict() (result map[string]interface{}) {
   return
 }
 
+func (r *Row) MarshalJSON() (result []byte, err error) {
+  result, err = json.Marshal(r.ToJSONDict())
+  return
+}
+
+func (r *Row) UnmarshalJSON(bs []byte) (err error) {
+  var data map[string]interface{} = make(map[string]interface{})
+  err = json.Unmarshal(bs, &data)
+  if err != nil {
+    return
+  }
+  r.fromJSON(data)
+  return
+}
+
+var camelCasePattern = regexp.MustCompile(`[a-z][a-z0-9-]*|[A-Z][A-Z]*[a-z]*`)
+
+func camelCaseToSnakeCase(src string) (result string) {
+  for _, p := range camelCasePattern.FindAllString(src, -1) {
+    p = strings.ToLower(p)
+    if result == "" {
+      result += p
+    } else {
+      result += "_" + p
+    }
+  }
+  return
+}
+
+func (r *Row) fromJSON(data map[string]interface{}) {
+  for key, val := range data {
+    key = camelCaseToSnakeCase(key)
+    _, isKey := r.Table.ForeignKeys[key]
+    switch t := val.(type) {
+    case map[string]interface{}:
+      if !isKey {
+        continue
+      }
+      row := r.Table.schema.Table(key).NewRow()
+      row.fromJSON(t)
+      r.Set(key, row)
+    case []interface{}:
+      if !isKey {
+        continue
+      }
+      var rows []*Row
+      for _, i := range t {
+        switch t0 := i.(type) {
+        case map[string]interface{}:
+            row := r.Table.schema.Table(key).NewRow()
+            row.fromJSON(t0)
+            rows = append(rows, row)
+        }
+      }
+      if rows != nil {
+        r.Set(key, rows)
+      }
+    case string, bool, float64, nil:
+      r.Set(key, val)
+    }
+  }
+  return
+}
 

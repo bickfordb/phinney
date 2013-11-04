@@ -5,7 +5,7 @@ import (
 )
 
 
-func (app *App) Route(path string, handler httpHandler) {
+func (app *App) Route(path string, handler Handler) {
   var route route
   route.pathTemplate = parseURLPattern(path)
   route.handler = handler
@@ -14,7 +14,7 @@ func (app *App) Route(path string, handler httpHandler) {
 
 type route struct {
   pathTemplate pathTemplate
-  handler httpHandler
+  handler Handler
 }
 
 type pathTemplate struct {

@@ -119,7 +119,7 @@ func (q *Query) compile() (result string, bind []interface{}, err error) {
     sql.WriteKeyword("ON")
     from := table
     if len(join.path) > 1 {
-      from = schema.Table(join.path[len(join.path) - 2])
+      from = table.schema.Table(join.path[len(join.path) - 2])
     }
     fk, exists := from.ForeignKeys[join.path[len(join.path) - 1]]
     if !exists {

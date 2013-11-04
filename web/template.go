@@ -6,7 +6,7 @@ import (
   "html/template"
 )
 
-func (h *Handler) SendTemplate(templatePath string, data interface{}) (err error) {
+func SendTemplate(h Handler, templatePath string, data interface{}) (err error) {
   f, err := OpenResource(templatePath, nil)
   if err != nil {
     return

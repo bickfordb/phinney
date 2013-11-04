@@ -103,14 +103,14 @@ func SecureString2(s string, key []byte, at time.Time) string {
 	return buf.String()
 }
 
-func (h *Handler) AddSecureCookie(cookie *http.Cookie) {
+func AddSecureCookie(h Handler, cookie *http.Cookie) {
 	cookie0 := *cookie
 	cookie0.Value = SecureString(cookie0.Value)
 	h.Header().Add("Set-Cookie", cookie0.String())
 }
 
-func (h *Handler) GetSecureCookie(name string) (s string, at time.Time) {
-	cookie, err := h.Request.Cookie(name)
+func GetSecureCookie(h Handler, name string) (s string, at time.Time) {
+	cookie, err := h.Request().Cookie(name)
 	if cookie == nil || err != nil {
 		return
 	}
