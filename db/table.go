@@ -1,5 +1,12 @@
 package db
 
+import (
+	"crypto/rand"
+	"fmt"
+	"io"
+  "time"
+)
+
 type Table struct {
   Name string
   Keys []string
@@ -13,8 +20,15 @@ func (t *Table) Query() *Query {
   return NewQuery(t)
 }
 
-func (t *Table) DefineColumn(name string, options ColumnOptions) {
+func (t *Table) Column(key string) (result *ColumnOptions) {
+  result, exists := t.Columns[key]
+  if !exists {
+    result = &ColumnOptions{}
+    t.Columns[key] = result
+  }
+  return
 }
+
 
 func (t *Table) NewRow() *Row {
   row := &Row{}
@@ -26,11 +40,12 @@ func (t *Table) NewRow() *Row {
 type Validator func(interface {}) error
 
 type ColumnOptions struct {
-  OnInsert func() interface{}
-  OnUpdate func() interface{}
+  OnInsert interface{}
+  OnUpdate interface{}
   Validator Validator
   IsNullable bool
   IsSerial bool
+  IsPublic bool
   ForeignKey *ForeignKey
   Required bool
 }
@@ -55,3 +70,12 @@ func (t *Table) conn() (conn *Conn, err error) {
   return
 }
 
+func UUID() string {
+	xs := make([]byte, 16)
+	io.ReadFull(rand.Reader, xs)
+	return fmt.Sprintf("%x-%x-%x-%x-%x", xs[0:4], xs[4:6], xs[6:8], xs[8:10], xs[10:])
+}
+
+func At() time.Time {
+  return time.Now().UTC()
+}

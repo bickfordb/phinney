@@ -5,8 +5,9 @@ import (
 )
 
 type Handler interface {
-  Before() error
-  After() error
+  BeforeRequest() error
+  ResponseWriter() http.ResponseWriter
+  AfterRequest() error
   Head() error
   Post() error
   Delete() error
@@ -20,7 +21,9 @@ type Handler interface {
   IsChunked() bool
   Header() http.Header
   Start()
+  NoteStarted()
   Write(buf []byte) (n int, err error)
+  App() *App
 }
 
 type concreteHandler struct {
@@ -34,6 +37,10 @@ type concreteHandler struct {
   app *App
 }
 
+func (c *concreteHandler) App() *App {
+  return c.app
+}
+
 func (c *concreteHandler) IsChunked() bool {
   return c.isChunked
 }
@@ -42,11 +49,15 @@ func (c *concreteHandler) SetIsChunked(t bool) {
   c.isChunked = t
 }
 
-func (c *concreteHandler) Before() (err error) {
+func (c *concreteHandler) BeforeRequest() (err error) {
   return
 }
-func (c *concreteHandler) After() (err error) {
+func (c *concreteHandler) AfterRequest() (err error) {
   return
+}
+
+func (c *concreteHandler) ResponseWriter() http.ResponseWriter {
+  return c.response
 }
 
 func (c *concreteHandler) Get() (err error) {
@@ -105,6 +116,10 @@ func (h *concreteHandler) Write(buf []byte) (n int, err error) {
 
 func (h *concreteHandler) Header() http.Header {
   return h.response.Header()
+}
+
+func (h *concreteHandler) NoteStarted() {
+  h.isStarted = true
 }
 
 func (h *concreteHandler) Start() {

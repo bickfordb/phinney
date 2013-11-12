@@ -59,7 +59,6 @@ func (t *Query) Filter(key string, value interface{}) *Query {
   if len(path) > 0 {
     fill = append(fill, strings.Join(path, "."))
   }
-  fmt.Println("fill", fill)
   return &Query{
     Parent: t,
     Fill: fill,
@@ -164,7 +163,6 @@ func (q *Query) compile() (result string, bind []interface{}, err error) {
 
 func (q *Query) Each(each func (row *Row) (stop bool)) (err error) {
   rootSQL, rootBind, err := q.compile()
-  fmt.Println("sql: ", rootSQL)
   if err != nil {
     return err
   }

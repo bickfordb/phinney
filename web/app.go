@@ -1,7 +1,6 @@
 package web
 
 import (
-  "fmt"
   "net/http"
   "reflect"
   "strings"
@@ -28,18 +27,21 @@ func (app *App) ServeHTTP(response http.ResponseWriter, request *http.Request) {
   handlerVal.status = http.StatusOK
   handlerVal.app = app
   for _, route := range app.routes {
-    fmt.Println("route: ", route)
     matches, args := route.matches(path)
     if !matches {
       continue
     }
     handlerVal.args = args
-    println("found handler");
     val := reflect.ValueOf(route.handler)
     h := reflect.New(val.Elem().Type())
+    for i := 0; i < h.Elem().NumField(); i++ {
+      dstField := h.Elem().FieldByIndex([]int{i})
+      srcField := val.Elem().Field(i)
+      dstField.Set(srcField)
+    }
     h.Elem().FieldByName("Handler").Set(reflect.ValueOf(handlerVal))
     handler := h.Interface().(Handler)
-    err = handler.Before()
+    err = handler.BeforeRequest()
     if err != nil {
       StatusPage(handler, http.StatusInternalServerError, err.Error())
       return
@@ -56,7 +58,7 @@ func (app *App) ServeHTTP(response http.ResponseWriter, request *http.Request) {
     } else if !handlerVal.isStarted {
       handler.Start()
     }
-    err = handler.After()
+    err = handler.AfterRequest()
     if err != nil {
       StatusPage(handler, http.StatusInternalServerError, err.Error())
       return

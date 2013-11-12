@@ -3,6 +3,7 @@ package web
 import (
   "bytes"
   "io"
+  "path/filepath"
   "html/template"
 )
 
@@ -11,12 +12,20 @@ func SendTemplate(h Handler, templatePath string, data interface{}) (err error) 
   if err != nil {
     return
   }
-  t, err := template.ParseFiles(f.Name())
+  t := template.New("")
+  t.Delims("{%", "%}")
+  if h.App().templateFuncs != nil {
+    t = t.Funcs(h.App().templateFuncs)
+  }
+  t, err = t.ParseFiles(f.Name())
   if err != nil {
     return
   }
+  if t == nil {
+    panic("expecting a template")
+  }
   var out bytes.Buffer
-  err = t.Execute(&out, data)
+  err = t.ExecuteTemplate(&out, filepath.Base(f.Name()), data)
   if err != nil {
     return
   }

@@ -31,7 +31,7 @@ func (r *route) matches(path string) (matches bool, args map[string]string) {
   matches = true
   args = make(map[string]string)
   for idx, variable := range r.pathTemplate.variables {
-    args[variable] = submatches[0][idx]
+    args[variable] = submatches[0][idx + 1]
   }
   return
 }
@@ -49,15 +49,17 @@ func parseURLPattern(url string) (result pathTemplate) {
   for _, submatch := range varPattern.FindAllStringSubmatch(url, -1) {
     s := submatch[0][1:]
     pattern += "/"
-    if len(s) > 1 && s[1] == ':' {
+    if len(s) >= 2 && s[:2] == ":*" {
       result.variables = append(result.variables, s[2:])
+      pattern += "(.+)"
+    } else if len(s) > 1 && s[0] == ':' {
+      result.variables = append(result.variables, s[1:])
       pattern += "([^/]+)"
     } else if len(s) > 0 {
-      pattern += regexp.QuoteMeta(s[1:])
+      pattern += regexp.QuoteMeta(s)
     }
   }
   pattern += "$"
-  println("pattern", pattern)
   result.pattern = regexp.MustCompile(pattern)
   return
 }

@@ -6,6 +6,7 @@ import (
   "fmt"
   "strings"
   "regexp"
+  "time"
 )
 
 type Row struct {
@@ -131,14 +132,29 @@ func (r *Row) getInsertVals() (result map[string]interface{}, err error) {
   for name, def := range r.Table.Columns {
     val, exists := r.RowDict[name]
 
-    if def.Required && val == nil {
-      err = fmt.Errorf("%q is required", name)
-      return
+
+    var f interface{} = def.OnInsert
+    if f == nil {
+      f = def.OnUpdate
+    }
+    if f != nil {
+      switch t := f.(type) {
+      case func() interface{}:
+        val = t()
+      case func() time.Time:
+        val = t()
+      case func() string:
+        val = t()
+      default:
+        err = fmt.Errorf("unexpected insert type %+v", f)
+        return
+      }
+      exists = true
     }
 
-    if def.OnInsert != nil {
-      val = def.OnInsert()
-      exists = true
+    if def.Required && !exists {
+      err = fmt.Errorf("%q is required", name)
+      return
     }
 
     if exists {
@@ -173,7 +189,6 @@ func (r *Row) compileInsert() (sql string, bind []interface{}, err error) {
 }
 
 func (r *Row) doUpdate() (err error) {
-  println("updating")
   bind := make([]interface{}, 0)
   sql := "UPDATE "
   sql += fmt.Sprintf("%q SET ", r.Table.Name)
@@ -184,7 +199,12 @@ func (r *Row) doUpdate() (err error) {
       sql += ", "
     }
     if opts.OnUpdate != nil {
-      val = opts.OnUpdate()
+      switch t := opts.OnUpdate.(type) {
+      case func() interface{}:
+        val = t()
+      default:
+        err = fmt.Errorf("dont know how to convert: %+v", opts.OnUpdate)
+      }
     }
     if val != nil {
       bind = append(bind, val)
@@ -207,7 +227,6 @@ func (r *Row) doUpdate() (err error) {
   }
   sql += strings.Join(wherePart, " AND ")
   sql += " RETURNING *"
-  println(" update ", sql)
   conn, err := r.Table.conn()
   if err != nil {
     return
@@ -240,10 +259,6 @@ var TLAs map[string]bool = map[string]bool{
 }
 
 func snakeCaseToCamelCase(s string) string {
-  if TLAs[s] {
-    return strings.ToUpper(s)
-  }
-
   b := &bytes.Buffer{}
   parts := strings.Split(s, "_")
   for i, p := range parts {

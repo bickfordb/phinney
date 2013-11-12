@@ -15,26 +15,6 @@ func (s *MySuite) Testquery(c *C) {
 }
 
 
-type DummyResponseWriter struct {
-  headers http.Header
-  *bytes.Buffer
-  status int
-}
-
-func newDummyResponseWriter() *DummyResponseWriter {
-  return &DummyResponseWriter{
-    headers: make(http.Header),
-    Buffer: &bytes.Buffer{},
-  }
-}
-
-func (d *DummyResponseWriter) Header() http.Header {
-  return d.headers
-}
-
-func (d *DummyResponseWriter) WriteHeader(status int) {
-  d.status = status
-}
 
 type testHandler struct {
   Handler
@@ -65,9 +45,9 @@ func (s *MySuite) TestTemplate(c *C) {
 
   app := &App{}
   app.Route("/", &templateHandler{})
-  responseWriter := newDummyResponseWriter()
+  responseWriter := NewDummyResponseWriter()
   app.ServeHTTP(responseWriter, request)
-  c.Assert(responseWriter.status, Equals, 200)
+  c.Assert(responseWriter.Status, Equals, 200)
   c.Assert(responseWriter.String(), Equals, "hello")
 }
 
@@ -76,16 +56,16 @@ func (s *MySuite) TestApp(c *C) {
   request, err := http.NewRequest("GET", "/", &bytes.Buffer{})
   c.Assert(err, IsNil)
   c.Assert(request, Not(IsNil))
-  responseWriter := newDummyResponseWriter()
+  responseWriter := NewDummyResponseWriter()
   app := &App{}
   app.Route("/", &testHandler{})
   app.ServeHTTP(responseWriter, request)
-  c.Assert(responseWriter.status, Equals, 200)
+  c.Assert(responseWriter.Status, Equals, 200)
   c.Assert(responseWriter.String(), Equals, "hello")
   request, err = http.NewRequest("GET", "/foo", &bytes.Buffer{})
-  responseWriter = newDummyResponseWriter()
+  responseWriter = NewDummyResponseWriter()
   app.ServeHTTP(responseWriter, request)
-  c.Assert(responseWriter.status, Equals, 404)
+  c.Assert(responseWriter.Status, Equals, 404)
 }
 
 type testJSONHandler struct {
@@ -119,13 +99,13 @@ func (s *MySuite) TestJSON(c *C) {
   request.Header.Add("Content-Type", "application/json")
 
   c.Assert(err, IsNil)
-  responseWriter := newDummyResponseWriter()
+  responseWriter := NewDummyResponseWriter()
   app := &App{}
   h := &testJSONHandler{}
   app.Route("/", h)
   app.ServeHTTP(responseWriter, request)
-  c.Assert(responseWriter.status, Equals, 200)
-  c.Assert(responseWriter.headers.Get("Content-Type"), Equals, "application/json")
+  c.Assert(responseWriter.Status, Equals, 200)
+  c.Assert(responseWriter.Headers.Get("Content-Type"), Equals, "application/json")
   var result testJSONData
   err = json.NewDecoder(responseWriter).Decode(&result)
   c.Assert(err, IsNil)

@@ -68,8 +68,7 @@ func (schema *Schema) Reflect() (err error) {
       columnName = columnName
       isNullable = isNullable
       dataType = dataType
-      colDef := &ColumnOptions{}
-      t.Columns[columnName] = colDef
+      colDef := t.Column(columnName)
       colDef.IsNullable = isNullable == "YES"
       // by default required == not null
 

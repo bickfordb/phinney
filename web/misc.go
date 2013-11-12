@@ -6,6 +6,7 @@ import (
   "fmt"
   "html"
   "io"
+  "io/ioutil"
 )
 
 func WriteHTML(h Handler, s string) (err error) {
@@ -48,3 +49,37 @@ func StatusPage(h Handler, code int, msg string) (err error) {
   return
 }
 
+type DummyResponseWriter struct {
+  Headers http.Header
+  *bytes.Buffer
+  Status int
+}
+
+func NewDummyResponseWriter() *DummyResponseWriter {
+  return &DummyResponseWriter{
+    Headers: make(http.Header),
+    Buffer: &bytes.Buffer{},
+  }
+}
+
+func (d *DummyResponseWriter) Header() http.Header {
+  return d.Headers
+}
+
+func (d *DummyResponseWriter) WriteHeader(status int) {
+  d.Status = status
+}
+
+func (d *DummyResponseWriter) HTTPResponse(request *http.Request) *http.Response {
+  return &http.Response{
+    Status: http.StatusText(d.Status),
+    StatusCode: d.Status,
+    Header: d.Headers,
+    Request: request,
+    Body: ioutil.NopCloser(d.Buffer),
+  }
+}
+
+func ClearCookie (h Handler, name string) {
+  h.Header().Add("Set-Cookie", name + "=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT")
+}
